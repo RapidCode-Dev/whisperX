@@ -226,5 +226,17 @@ def cli():
         result["language"] = align_language
         writer(result, audio_path, writer_args)
 
+def transcribe():
+    # GPU related 
+    # The first step and second step 
+    # This function should return what is needed for the diarize function
+    print("Transcribe")
+
+def diarize(): 
+    # CPU related
+    # The Third and Fourth step
+    # This function should return the result 
+    print("Diarize")
+
 if __name__ == "__main__":
     cli()
