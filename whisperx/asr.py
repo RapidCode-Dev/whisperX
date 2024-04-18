@@ -245,31 +245,47 @@ class FasterWhisperPipeline(Pipeline):
     def detect_language(self, audio: np.ndarray):
         if audio.shape[0] < N_SAMPLES:
             print("Warning: audio is shorter than 30s, language detection may be inaccurate.")
-        
-        model_n_mels = self.model.feat_kwargs.get("feature_size", 80)
-        segment = log_mel_spectrogram(audio[:N_SAMPLES],
-                                    n_mels=model_n_mels,
-                                    padding=0 if audio.shape[0] >= N_SAMPLES else N_SAMPLES - audio.shape[0])
-        encoder_output = self.model.encode(segment)
-        results = self.model.model.detect_language(encoder_output)
-        language_token, language_probability = results[0][0]
-        language = language_token[2:-2]
-        print(f"Detected language: {language} ({language_probability:.2f}) in first 30s of audio...")
-        
-        # Retry with 5 times the audio length if confidence is low
-        if language_probability < 0.5:
-            print("Confidence below 0.5, retrying with 5x longer audio segment...")
-            extended_segment = log_mel_spectrogram(audio[:5 * N_SAMPLES],
-                                                n_mels=model_n_mels,
-                                                padding=0 if audio.shape[0] >= 5 * N_SAMPLES else 5 * N_SAMPLES - audio.shape[0])
-            extended_encoder_output = self.model.encode(extended_segment)
-            extended_results = self.model.model.detect_language(extended_encoder_output)
-            extended_language_token, extended_language_probability = extended_results[0][0]
-            extended_language = extended_language_token[2:-2]
-            print(f"Detected language on retry: {extended_language} ({extended_language_probability:.2f}) with extended audio.")
-            return extended_language
-        
-        return language
+
+        # Initialize a dictionary to keep track of language probabilities
+        language_probabilities = {}
+
+        # Function to process segments and update language probabilities
+        def process_segment(segment_audio):
+            model_n_mels = self.model.feat_kwargs.get("feature_size", 80)
+            segment = log_mel_spectrogram(segment_audio,
+                                        n_mels=model_n_mels,
+                                        padding=0 if len(segment_audio) >= N_SAMPLES else N_SAMPLES - len(segment_audio))
+            encoder_output = self.model.encode(segment)
+            results = self.model.model.detect_language(encoder_output)
+            lang_token, lang_prob = results[0][0]
+            lang = lang_token[2:-2]
+            if lang in language_probabilities:
+                if lang_prob > language_probabilities[lang]:
+                    language_probabilities[lang] = lang_prob
+            else:
+                language_probabilities[lang] = lang_prob
+            return lang, lang_prob
+
+        # Process the first 30s segment
+        initial_language, initial_probability = process_segment(audio[:N_SAMPLES])
+        print(f"Detected language: {initial_language} ({initial_probability:.2f}) in first 30s of audio...")
+
+        # Retry with subsequent 30-second segments if confidence is below 0.5
+        if initial_probability < 0.5:
+            print("Confidence below 0.5, retrying with subsequent 30s segments...")
+            for start in range(N_SAMPLES, min(5 * N_SAMPLES, audio.shape[0]), N_SAMPLES):
+                segment_language, segment_probability = process_segment(audio[start:start + N_SAMPLES])
+                print(f"Detected language in segment {start // N_SAMPLES}: {segment_language} ({segment_probability:.2f})")
+
+        # Find the language with the highest cumulative probability
+        if language_probabilities:
+            final_language = max(language_probabilities, key=language_probabilities.get)
+            final_probability = language_probabilities[final_language]
+            print(f"Most probable language: {final_language} with confidence {final_probability:.2f}")
+            return final_language
+        else:
+            return initial_language
+
 
 
 def load_model(whisper_arch,
