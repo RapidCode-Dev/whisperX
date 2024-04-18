@@ -315,7 +315,7 @@ def transcribe(audio: str, model_name: str, languageFromArg: str = None, initial
                 raise ValueError(f"--{option} not possible with --no_align")
     if max_line_count and not max_line_width:
         warnings.warn("--max_line_count has no effect without --max_line_width")
-    writer_args = {arg: args.pop(arg) for arg in word_options}
+    writer_args = {"highlight_words": highlight_words, "max_line_count": max_line_count, "max_line_width": max_line_width}
     
     # Part 1: VAD & ASR Loop
     results = []
