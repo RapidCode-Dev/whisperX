@@ -245,16 +245,32 @@ class FasterWhisperPipeline(Pipeline):
     def detect_language(self, audio: np.ndarray):
         if audio.shape[0] < N_SAMPLES:
             print("Warning: audio is shorter than 30s, language detection may be inaccurate.")
-        model_n_mels = self.model.feat_kwargs.get("feature_size")
-        segment = log_mel_spectrogram(audio[: N_SAMPLES],
-                                      n_mels=model_n_mels if model_n_mels is not None else 80,
-                                      padding=0 if audio.shape[0] >= N_SAMPLES else N_SAMPLES - audio.shape[0])
+        
+        model_n_mels = self.model.feat_kwargs.get("feature_size", 80)
+        segment = log_mel_spectrogram(audio[:N_SAMPLES],
+                                    n_mels=model_n_mels,
+                                    padding=0 if audio.shape[0] >= N_SAMPLES else N_SAMPLES - audio.shape[0])
         encoder_output = self.model.encode(segment)
         results = self.model.model.detect_language(encoder_output)
         language_token, language_probability = results[0][0]
         language = language_token[2:-2]
         print(f"Detected language: {language} ({language_probability:.2f}) in first 30s of audio...")
+        
+        # Retry with 5 times the audio length if confidence is low
+        if language_probability < 0.5:
+            print("Confidence below 0.5, retrying with 5x longer audio segment...")
+            extended_segment = log_mel_spectrogram(audio[:5 * N_SAMPLES],
+                                                n_mels=model_n_mels,
+                                                padding=0 if audio.shape[0] >= 5 * N_SAMPLES else 5 * N_SAMPLES - audio.shape[0])
+            extended_encoder_output = self.model.encode(extended_segment)
+            extended_results = self.model.model.detect_language(extended_encoder_output)
+            extended_language_token, extended_language_probability = extended_results[0][0]
+            extended_language = extended_language_token[2:-2]
+            print(f"Detected language on retry: {extended_language} ({extended_language_probability:.2f}) with extended audio.")
+            return extended_language
+        
         return language
+
 
 def load_model(whisper_arch,
                device,
