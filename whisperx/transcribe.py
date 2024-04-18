@@ -226,14 +226,14 @@ def cli():
         result["language"] = align_language
         writer(result, audio_path, writer_args)
 
-def transcribe(audio: list, model_name: str, languageFromArg: str = None, initial_prompt: str = None, min_speaker: int = 2, max_speaker: int = 5):
+def transcribe(audio: list, model_name: str, languageFromArg: str = None, initial_prompt: str = None, min_speakers: int = 2, max_speakers: int = 5):
     # GPU related 
     # The first step and second step 
     # This function should return what is needed for the diarize function
     args = {}
     args["language"] = languageFromArg
 
-    output_format = "json"
+    output_format = "json" # all, srt, vtt, txt, tsv, json, aud
     hf_token = os.getenv("HF_TOKEN")
     align_model = "WAV2VEC2_ASR_LARGE_LV60K_960H"
     diarize = True
@@ -368,8 +368,8 @@ def transcribe(audio: list, model_name: str, languageFromArg: str = None, initia
     "hf_token": hf_token,
     "device": device,
     "diarize": diarize,
-    "min_speaker": min_speaker,
-    "max_speaker": max_speaker,
+    "min_speakers": min_speakers,
+    "max_speakers": max_speakers,
     "align_language": align_language,
     "writer": writer,
     "writer_args": writer_args
