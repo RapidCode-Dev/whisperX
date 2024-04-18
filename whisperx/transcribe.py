@@ -226,17 +226,170 @@ def cli():
         result["language"] = align_language
         writer(result, audio_path, writer_args)
 
-def transcribe():
+def transcribe(file: str, model_name: str, languageFromArg: str = None, min_speaker: int = 2, max_speaker: int = 5):
     # GPU related 
     # The first step and second step 
     # This function should return what is needed for the diarize function
-    print("Transcribe")
+    args = {}
+    args["language"] = languageFromArg
 
-def diarize(): 
+    output_format = "json"
+    hf_token = os.getenv("HF_TOKEN")
+    align_model = "WAV2VEC2_ASR_LARGE_LV60K_960H"
+    diarize = True
+    highlight_words = True
+    print_progress = True
+
+    batch_size = 8
+    model_dir = None
+    output_dir = "."
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
+    device_index = 0
+    compute_type: str = "float16"
+
+    # model_flush: bool = args.pop("model_flush")
+    os.makedirs(output_dir, exist_ok=True)
+
+    interpolate_method = "nearest"
+    no_align = False
+    task = "transcribe" # transcribe or  +translate
+    if task == "translate":
+        # translation cannot be aligned
+        no_align = True
+
+    return_char_alignments = False
+
+    vad_onset = 0.500
+    vad_offset = 0.363
+
+    chunk_size = 30
+
+    if args["language"] is not None:
+        args["language"] = args["language"].lower()
+        if args["language"] not in LANGUAGES:
+            if args["language"] in TO_LANGUAGE_CODE:
+                args["language"] = TO_LANGUAGE_CODE[args["language"]]
+            else:
+                raise ValueError(f"Unsupported language: {args['language']}")
+
+    if model_name.endswith(".en") and args["language"] != "en":
+        if args["language"] is not None:
+            warnings.warn(
+                f"{model_name} is an English-only model but received '{args['language']}'; using English instead."
+            )
+        args["language"] = "en"
+    align_language = args["language"] if args["language"] is not None else "en" # default to loading english if not specified
+
+    temperature = args.pop("temperature")
+    if (increment := args.pop("temperature_increment_on_fallback")) is not None:
+        temperature = tuple(np.arange(temperature, 1.0 + 1e-6, increment))
+    else:
+        temperature = [temperature]
+
+    faster_whisper_threads = 4
+    if (threads := args.pop("threads")) > 0:
+        torch.set_num_threads(threads)
+        faster_whisper_threads = threads
+
+    asr_options = {
+        "beam_size": args.pop("beam_size"),
+        "patience": args.pop("patience"),
+        "length_penalty": args.pop("length_penalty"),
+        "temperatures": temperature,
+        "compression_ratio_threshold": args.pop("compression_ratio_threshold"),
+        "log_prob_threshold": args.pop("logprob_threshold"),
+        "no_speech_threshold": args.pop("no_speech_threshold"),
+        "condition_on_previous_text": False,
+        "initial_prompt": args.pop("initial_prompt"),
+        "suppress_tokens": [int(x) for x in args.pop("suppress_tokens").split(",")],
+        "suppress_numerals": args.pop("suppress_numerals"),
+    }
+
+    writer = get_writer(output_format, output_dir)
+    word_options = ["highlight_words", "max_line_count", "max_line_width"]
+    if no_align:
+        for option in word_options:
+            if args[option]:
+                raise ValueError(f"--{option} not possible with --no_align")
+    if args["max_line_count"] and not args["max_line_width"]:
+        warnings.warn("--max_line_count has no effect without --max_line_width")
+    writer_args = {arg: args.pop(arg) for arg in word_options}
+    
+    # Part 1: VAD & ASR Loop
+    results = []
+    tmp_results = []
+    # model = load_model(model_name, device=device, download_root=model_dir)
+    model = load_model(model_name, device=device, device_index=device_index, download_root=model_dir, compute_type=compute_type, language=args['language'], asr_options=asr_options, vad_options={"vad_onset": vad_onset, "vad_offset": vad_offset}, task=task, threads=faster_whisper_threads)
+
+    for audio_path in args.pop("audio"):
+        audio = load_audio(audio_path)
+        # >> VAD & ASR
+        print(">>Performing transcription...")
+        result = model.transcribe(audio, batch_size=batch_size, chunk_size=chunk_size, print_progress=print_progress)
+        results.append((result, audio_path))
+
+    # Unload Whisper and VAD
+    del model
+    gc.collect()
+    torch.cuda.empty_cache()
+    print(">> Transcription done!")
+    # Part 2: Align Loop
+    if not no_align:
+        tmp_results = results
+        results = []
+        align_model, align_metadata = load_align_model(align_language, device, model_name=align_model)
+        for result, audio_path in tmp_results:
+            # >> Align
+            if len(tmp_results) > 1:
+                input_audio = audio_path
+            else:
+                # lazily load audio from part 1
+                input_audio = audio
+
+            if align_model is not None and len(result["segments"]) > 0:
+                if result.get("language", "en") != align_metadata["language"]:
+                    # load new language
+                    print(f"New language found ({result['language']})! Previous was ({align_metadata['language']}), loading new alignment model for new language...")
+                    align_model, align_metadata = load_align_model(result["language"], device)
+                print(">>Performing alignment...")
+                result = align(result["segments"], align_model, align_metadata, input_audio, device, interpolate_method=interpolate_method, return_char_alignments=return_char_alignments, print_progress=print_progress)
+
+            results.append((result, audio_path))
+            
+        # Unload align model
+        del align_model
+        gc.collect()
+        torch.cuda.empty_cache()
+        print(">> Align done!")
+
+    return {results, hf_token, device, diarize, min_speaker, max_speaker, align_language, writer, writer_args}
+
+
+
+def diarize(results, hf_token, device, diarize, min_speakers, max_speakers, align_language, writer, writer_args): 
     # CPU related
     # The Third and Fourth step
     # This function should return the result 
-    print("Diarize")
+    # >> Diarize
+    if diarize:
+        if hf_token is None:
+            print("Warning, no --hf_token used, needs to be saved in environment variable, otherwise will throw error loading diarization model...")
+        tmp_results = results
+        print(">>Performing diarization...")
+        results = []
+        diarize_model = DiarizationPipeline(use_auth_token=hf_token, device=device)
+        for result, input_audio_path in tmp_results:
+            diarize_segments = diarize_model(input_audio_path, min_speakers=min_speakers, max_speakers=max_speakers)
+            result = assign_word_speakers(diarize_segments, result)
+            results.append((result, input_audio_path))
+        print(">> Diarization done!")
+    # >> Write
+    print(">> Writing results...")
+    for result, audio_path in results:
+        result["language"] = align_language
+        writer(result, audio_path, writer_args)
+    print(">> Writing done!")
+
 
 if __name__ == "__main__":
     cli()
