@@ -364,7 +364,17 @@ def transcribe(audio: list, model_name: str, languageFromArg: str = None, initia
         torch.cuda.empty_cache()
         print(">> Align done!")
 
-    return results, {hf_token, device, diarize, min_speaker, max_speaker, align_language, writer, writer_args}
+    return results, {
+    "hf_token": hf_token,
+    "device": device,
+    "diarize": diarize,
+    "min_speaker": min_speaker,
+    "max_speaker": max_speaker,
+    "align_language": align_language,
+    "writer": writer,
+    "writer_args": writer_args
+    }
+
 
 
 
