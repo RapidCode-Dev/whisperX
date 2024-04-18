@@ -226,7 +226,7 @@ def cli():
         result["language"] = align_language
         writer(result, audio_path, writer_args)
 
-def transcribe(file: str, model_name: str, languageFromArg: str = None, initial_prompt: str = None, min_speaker: int = 2, max_speaker: int = 5):
+def transcribe(audio: str, model_name: str, languageFromArg: str = None, initial_prompt: str = None, min_speaker: int = 2, max_speaker: int = 5):
     # GPU related 
     # The first step and second step 
     # This function should return what is needed for the diarize function
@@ -321,7 +321,7 @@ def transcribe(file: str, model_name: str, languageFromArg: str = None, initial_
     # model = load_model(model_name, device=device, download_root=model_dir)
     model = load_model(model_name, device=device, device_index=device_index, download_root=model_dir, compute_type=compute_type, language=args['language'], asr_options=asr_options, vad_options={"vad_onset": vad_onset, "vad_offset": vad_offset}, task=task, threads=faster_whisper_threads)
 
-    for audio_path in args.pop("audio"):
+    for audio_path in audio:
         audio = load_audio(audio_path)
         # >> VAD & ASR
         print(">>Performing transcription...")
