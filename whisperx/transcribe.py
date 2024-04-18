@@ -239,6 +239,8 @@ def transcribe(audio: str, model_name: str, languageFromArg: str = None, initial
     diarize = True
     highlight_words = True
     print_progress = True
+    max_line_count = None
+    max_line_width = None
 
     batch_size = 8
     model_dir = None
@@ -311,7 +313,7 @@ def transcribe(audio: str, model_name: str, languageFromArg: str = None, initial
         for option in word_options:
             if args[option]:
                 raise ValueError(f"--{option} not possible with --no_align")
-    if args["max_line_count"] and not args["max_line_width"]:
+    if max_line_count and not max_line_width:
         warnings.warn("--max_line_count has no effect without --max_line_width")
     writer_args = {arg: args.pop(arg) for arg in word_options}
     
