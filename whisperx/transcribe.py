@@ -226,7 +226,7 @@ def cli():
         result["language"] = align_language
         writer(result, audio_path, writer_args)
 
-def transcribe(file: str, model_name: str, languageFromArg: str = None, min_speaker: int = 2, max_speaker: int = 5):
+def transcribe(file: str, model_name: str, languageFromArg: str = None, initial_prompt: str = None, min_speaker: int = 2, max_speaker: int = 5):
     # GPU related 
     # The first step and second step 
     # This function should return what is needed for the diarize function
@@ -280,29 +280,29 @@ def transcribe(file: str, model_name: str, languageFromArg: str = None, min_spea
         args["language"] = "en"
     align_language = args["language"] if args["language"] is not None else "en" # default to loading english if not specified
 
-    temperature = args.pop("temperature")
-    if (increment := args.pop("temperature_increment_on_fallback")) is not None:
+    temperature = 0
+    if (increment := 0.2) is not None:
         temperature = tuple(np.arange(temperature, 1.0 + 1e-6, increment))
     else:
         temperature = [temperature]
 
     faster_whisper_threads = 4
-    if (threads := args.pop("threads")) > 0:
+    if (threads := 0) > 0:
         torch.set_num_threads(threads)
         faster_whisper_threads = threads
 
     asr_options = {
-        "beam_size": args.pop("beam_size"),
-        "patience": args.pop("patience"),
-        "length_penalty": args.pop("length_penalty"),
+        "beam_size": 5,
+        "patience": 1.0,
+        "length_penalty": 1.0,
         "temperatures": temperature,
-        "compression_ratio_threshold": args.pop("compression_ratio_threshold"),
-        "log_prob_threshold": args.pop("logprob_threshold"),
-        "no_speech_threshold": args.pop("no_speech_threshold"),
+        "compression_ratio_threshold": 2.4,
+        "log_prob_threshold": 1.0,
+        "no_speech_threshold": 0.6,
         "condition_on_previous_text": False,
-        "initial_prompt": args.pop("initial_prompt"),
-        "suppress_tokens": [int(x) for x in args.pop("suppress_tokens").split(",")],
-        "suppress_numerals": args.pop("suppress_numerals"),
+        "initial_prompt": initial_prompt,
+        "suppress_tokens": [int(x) for x in "-1".split(",")],
+        "suppress_numerals": False,
     }
 
     writer = get_writer(output_format, output_dir)
