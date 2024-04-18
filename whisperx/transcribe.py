@@ -226,7 +226,7 @@ def cli():
         result["language"] = align_language
         writer(result, audio_path, writer_args)
 
-def transcribe(audio: str, model_name: str, languageFromArg: str = None, initial_prompt: str = None, min_speaker: int = 2, max_speaker: int = 5):
+def transcribe(audio: list, model_name: str, languageFromArg: str = None, initial_prompt: str = None, min_speaker: int = 2, max_speaker: int = 5):
     # GPU related 
     # The first step and second step 
     # This function should return what is needed for the diarize function
