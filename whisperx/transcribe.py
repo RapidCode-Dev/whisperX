@@ -334,6 +334,7 @@ def transcribe(audio: list, model_name: str, languageFromArg: str = None, initia
     del model
     gc.collect()
     torch.cuda.empty_cache()
+    torch.cuda.ipc_collect()
     print(">> Transcription done!")
     # Part 2: Align Loop
     if not no_align:
@@ -362,6 +363,7 @@ def transcribe(audio: list, model_name: str, languageFromArg: str = None, initia
         del align_model
         gc.collect()
         torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
         print(">> Align done!")
 
     return results, {
@@ -399,6 +401,7 @@ def diarize(results, hf_token, device, diarize, min_speakers, max_speakers, alig
         del diarize_model
         gc.collect()
         torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
     # >> Write
     print(">> Writing results...")
     for result, audio_path in results:
