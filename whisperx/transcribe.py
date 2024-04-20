@@ -403,11 +403,11 @@ def diarize(results, hf_token, device, diarize, min_speakers, max_speakers, alig
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
     # >> Write
-    print(">> Writing results...")
-    for result, audio_path in results:
-        result["language"] = align_language
-        writer(result, audio_path, writer_args)
-    print(">> Writing done!")
+#    print(">> Writing results...")
+#    for result, audio_path in results:
+#        result["language"] = align_language
+#        writer(result, audio_path, writer_args)
+#    print(">> Writing done!")
     return results
 
 
