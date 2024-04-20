@@ -401,6 +401,7 @@ def diarize(results, hf_token, device, diarize, min_speakers, max_speakers, alig
         result["language"] = align_language
         writer(result, audio_path, writer_args)
     print(">> Writing done!")
+    return results
 
 
 if __name__ == "__main__":
