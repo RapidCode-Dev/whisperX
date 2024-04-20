@@ -395,6 +395,10 @@ def diarize(results, hf_token, device, diarize, min_speakers, max_speakers, alig
             result = assign_word_speakers(diarize_segments, result)
             results.append((result, input_audio_path))
         print(">> Diarization done!")
+
+        del diarize_model
+        gc.collect()
+        torch.cuda.empty_cache()
     # >> Write
     print(">> Writing results...")
     for result, audio_path in results:
